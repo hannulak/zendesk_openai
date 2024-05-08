@@ -1,0 +1,7 @@
+streamlit
+pandas
+wordcloud
+matplotlib
+requests
+json
+
