@@ -22,10 +22,10 @@ def plot_word_cloud():
 
 # Streamlit app
 def main():
-    st.title('Word Cloud Visualization')
-    st.write("This is a simple word cloud visualization.")
+    st.title('Centro de llamadas de Supermarket 23')
+    st.write("Este es un ejemplo de visualización de Insigths")
 
-    if st.button('Show Word Cloud'):
+    if st.button('Mostrar Nube de Palabras'):
         st.set_option('deprecation.showPyplotGlobalUse', False)  # Opción para evitar una advertencia en Streamlit
         plot_word_cloud()
         st.pyplot()  # Mostrar la figura en la interfaz de Streamlit
