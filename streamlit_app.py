@@ -4,6 +4,7 @@ import json
 import requests
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def fetch_tickets(url, params, auth):
@@ -45,7 +46,12 @@ def create_message(subject, description):
         "messages": [
             {
                 "role": "system",
-                "content": "Analiza la categoría, urgencia y sentimiento del siguiente ticket. Responde con tres palabras que representen lo mejor posible tu análisis respectivamente. Por ejemplo: compra asistida, alta prioridad, neutro."
+                "content": "Necesito una evaluación concisa del siguiente ticket en forma de tres palabras separadas "
+                           "por comas que represente lo más cercano posible lo siguiente:"
+                           "La categoría general del problema con una de las  palabras siguientes: "
+                           " problema de pago, reclamación de producto, solicitud de información, verificación, valoración, duda, otro."
+                           "La prioridad basada en la urgencia con una de las  palabras siguientes: baja, normal, alta o urgente."
+                           "El sentimiento con una de las  palabras siguientes: positivo, neutral o negativo."
             },
             {
                 "role": "user",
@@ -64,20 +70,51 @@ def analyze_tickets(df, headers):
             df.at[index, 'response'] = 'No response'
     return df
 
+#VISUALIZACIONES
+def create_and_show_wordcloud(df):
+    # Crear una nube de palabras para las categorías de problemas
 
-def create_and_show_wordcloud(df, column='response'):
-    if column in df.columns:
-        # Preprocesamiento básico: convertir a minúsculas
-        text = " ".join(str(desc).lower() for desc in df[column] if isinstance(desc, str))
+    categories_text = " ".join(cat for cat in df['category'])
+    sentiment_text = " ".join(sent for sent in df['sentiment'])
 
-        # Generar y mostrar la nube de palabras
-        wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
-        plt.figure(figsize=(10, 5))
-        plt.imshow(wordcloud, interpolation='bilinear')
-        plt.axis("off")
-        plt.show()
-    else:
-        print(f"Error: La columna '{column}' no existe en el DataFrame.")
+    fig, ax = plt.subplots(1, 2, figsize=(16, 8))  # Dos subplots
+    # Nube de palabras para categorías
+    wordcloud_cat = WordCloud(width=400, height=400, background_color='white').generate(categories_text)
+    ax[0].imshow(wordcloud_cat, interpolation='bilinear')
+    ax[0].set_title('Categorías de Problemas')
+    ax[0].axis("off")
+
+    # Nube de palabras para sentimientos
+    wordcloud_sent = WordCloud(width=400, height=400, background_color='white').generate(sentiment_text)
+    ax[1].imshow(wordcloud_sent, interpolation='bilinear')
+    ax[1].set_title('Sentimientos Expresados')
+    ax[1].axis("off")
+    st.pyplot()
+#    plt.show()
+def show_urgency_distribution(df):
+    #Normalizar el text en minusculas
+    df['urgency'] = df['urgency'].str.lower()
+
+    plt.figure(figsize=(8, 4))
+    sns.countplot(x='urgency', data=df)
+    plt.title('Distribución de Prioridad de los Tickets')
+    plt.xlabel('Prioridad')
+    plt.ylabel('Número de Tickets')
+#   plt.show()
+    st.pyplot()
+
+def show_sentiment_distribution(df):
+    # Eliminar puntos al final de las cadenas en la columna 'sentiment' y poner todo en minuscula
+    df['sentiment'] = df['sentiment'].str.replace(r'\.$', '', regex=True).str.lower()
+
+    plt.figure(figsize=(8, 4))
+    sns.countplot(x='sentiment', data=df)
+    plt.title('Distribución de Sentimientos')
+    plt.xlabel('Sentimiento')
+    plt.ylabel('Número de Tickets')
+#   plt.show()
+    st.pyplot()
+
 
 #Usada para test
 #Guardar el dataframe a csv para revisar
@@ -103,9 +140,9 @@ def main():
     url = 'https://callcentertreew.zendesk.com/api/v2/search.json'
     params = {'query': f'type:ticket status:{selected_status}', 'sort_by': 'created_at', 'sort_order': 'asc'}
     #params = {'query': 'type:ticket status:''user_input', 'sort_by': 'created_at', 'sort_order': 'asc'}
-    auth = ('chat_account8@treew.com/token', 'token de Zendesk')
+    auth = ('chat_account8@treew.com/token', 'Aqui va la API  KEY de zendesk')
     headers = {'Content-Type': 'application/json',
-               'Authorization': 'Bearer Aqui va el token de openai'}
+               'Authorization': 'Bearer Aqui va la API  KEY de chatgpt'}
 
     if st.button('Cargar y Procesar los datos'):
         st.set_option('deprecation.showPyplotGlobalUse', False)  # Opción para evitar una advertencia en Streamlit
@@ -124,15 +161,21 @@ def main():
         st.write("Analizando los tickets...")
         # Analyze tickets con chagpt version 3.5 turbo
         df = analyze_tickets(df, headers)
-        progress_bar.progress(50)  # Actualizar el progreso a 50%
 
-        st.write("Creando visualización de la nube de palabras...")
-        #Plot de gráfico de nubes
+        # Dividir la columna 'response' en tres nuevas columnas
+        df[['category', 'urgency', 'sentiment']] = df['response'].str.split(',', expand=True)
+
+
+
+        progress_bar.progress(50)  # Actualizar el progreso a 50%
+        st.write("Creando visualizaciónes...")
+
+        #Graficar
+        show_urgency_distribution(df)
+        show_sentiment_distribution(df)
         create_and_show_wordcloud(df)
 
-        st.pyplot()  # Mostrar la figura en la interfaz de Streamlit
         progress_bar.progress(100)  # Completa el progreso
-
         st.success('Visualización completada con éxito!')
 
 if __name__ == '__main__':
