@@ -137,10 +137,10 @@ def main():
     #st.write(f"El estado del ticket seleccionado es: {selected_status}")
 
     # Configuration and parameters
-    url = 'https://callcentertreew.zendesk.com/api/v2/search.json'
+    url = 'https://{url}.zendesk.com/api/v2/search.json'
     params = {'query': f'type:ticket status:{selected_status}', 'sort_by': 'created_at', 'sort_order': 'asc'}
     #params = {'query': 'type:ticket status:''user_input', 'sort_by': 'created_at', 'sort_order': 'asc'}
-    auth = ('chat_account8@treew.com/token', 'Aqui va la API  KEY de zendesk')
+    auth = ('account/token', 'Aqui va la API  KEY de zendesk')
     headers = {'Content-Type': 'application/json',
                'Authorization': 'Bearer Aqui va la API  KEY de chatgpt'}
 
