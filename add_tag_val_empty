@@ -1,0 +1,70 @@
+from flask import Flask, request, jsonify
+import requests
+
+app = Flask(__name__)
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.json
+    ticket_id = data['ticket']['id']
+    #subject = data['ticket']['subject']
+    comment = data['ticket']['description']
+
+    if check_last_character(comment):
+        update_ticket(ticket_id, 'sin_comentario')
+
+    #response = analyze_with_chatgpt(subject, comment)
+    print("Received webhook data:", data)  # Imprime los datos para revisión
+
+    return jsonify(status="success"), 200
+
+#Comprobar que los : son los ultimos caracteres de la cadena que trae description
+def check_last_character(description):
+    # Elimina los espacios en blanco al final de la descripción
+    description = description.strip()
+    # Verifica si el último carácter es ':'
+    if description[-1] == ':':
+        return True
+
+#Analisis por chatgpt
+def analyze_with_chatgpt(subject, comment):
+    openai_url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": "Bearer Key",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": f"Subject: {subject}\nComment: {comment}"}]
+    }
+    response = requests.post(openai_url, json=data, headers=headers)
+    return response.json()['choices'][0]['message']['content']
+
+
+def update_ticket(ticket_id, status):
+    url = f"https://callcentertreew.zendesk.com/api/v2/tickets/{ticket_id}.json"
+    auth = ('account/token',
+            'Key')  # Asegúrate de reemplazar con tus credenciales reales
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    # El valor "status" debe ser enviado en un campo que acepte Zendesk, aquí lo pongo en un campo personalizado como ejemplo
+    # Asegúrate de que el 'id' del campo personalizado sea correcto y que el campo acepte el tipo de datos que envías
+    data = {
+        "ticket": {
+            "custom_fields": [{"id": 25656014483483, "value": status}]
+        }
+    }
+
+    response = requests.put(url, json=data, auth=auth, headers=headers)
+
+    if response.status_code == 200:
+        print("Ticket updated successfully")
+    else:
+        print(f"Failed to update ticket: {response.status_code} - {response.text}")
+
+    return response
+
+if __name__ == '__main__':
+    app.run(port=5000, debug=True)
