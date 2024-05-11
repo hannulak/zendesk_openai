@@ -5,7 +5,7 @@ import os
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 
-url = 'https://callcentertreew.zendesk.com/api/v2/search.json'
+url = 'https://{url}/api/v2/search.json'
 
 params = {
     'query': 'type:ticket status:new',
@@ -13,7 +13,7 @@ params = {
     'sort_order': 'asc'
 }
 
-auth = ('chat_account8@treew.com/token', 'aqui va la KEY de Zendesk')
+auth = ('account/token', 'aqui va la KEY de Zendesk')
 
 response = requests.get(url, params=params, auth=auth)
 
@@ -90,7 +90,7 @@ def process_tickets(json_file):
     url = 'https://api.openai.com/v1/chat/completions'
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer {aqui va la KEY de Zendesk}'
+        'Authorization': 'Bearer {aqui va la KEY de chatgpt}'
     }
 
     # Procesar cada entrada en el archivo JSON
