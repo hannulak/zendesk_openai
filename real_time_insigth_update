@@ -1,0 +1,136 @@
+import streamlit as st
+import requests
+import pandas as pd
+import re
+import time
+
+# Configuración inicial de Streamlit
+st.set_page_config(page_title="Análisis de Tickets en Tiempo Real", layout="wide")
+
+# API Keys y URLs
+api_key = 'your_openai_api_key'
+headers = {
+    'Authorization': f'Bearer {api_key}',
+    'Content-Type': 'application/json'
+}
+zendesk_url = 'https://your_subdomain.zendesk.com/api/v2/tickets.json'
+zendesk_auth = ('your_email/token', 'your_api_token')
+zendesk_params = {'sort_by': 'created_at', 'sort_order': 'desc', 'per_page': 100}
+refresh_interval = 60  # Intervalo de actualización en segundos
+
+@st.cache_data(ttl=300, show_spinner=True)  # Cache válido por 5 minutos
+def fetch_zendesk_tickets(url, auth, params, max_pages=None):
+    all_tickets = []
+    current_page = 0
+
+    while url and (max_pages is None or current_page < max_pages):
+        response = requests.get(url, auth=auth, params=params)
+        response.raise_for_status()
+        data = response.json()
+        all_tickets.extend(data['tickets'])
+        current_page += 1
+        print(f"Paginación actual: {current_page}, Tickets cargados: {len(all_tickets)}")
+        url = data.get('next_page')
+        if url is None:
+            break
+
+    return pd.DataFrame(all_tickets)
+
+def preprocess_tickets(df):
+    # Elimina HTML y caracteres especiales
+    df['clean_description'] = df['description'].apply(lambda x: re.sub('<[^<]+?>', '', str(x)))
+    df['clean_description'] = df['clean_description'].apply(lambda x: re.sub(r'[^\w\s]', '', x))
+    
+    return df
+
+def call_openai_api(data, headers, max_retries=5):
+    url = 'https://api.openai.com/v1/chat/completions'
+    retries = 0
+    while retries < max_retries:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 429:
+            print("Too many requests. Retrying...")
+            retries += 1
+            time.sleep(2 ** retries)  # Exponential backoff
+        else:
+            response.raise_for_status()
+            return response.json(), response.headers
+    raise Exception("Max retries exceeded")
+
+def get_general_analysis(df, headers, max_tokens=4096):
+    # Combina todas las descripciones en un solo texto
+    combined_text = ' '.join(df['clean_description'])
+    
+    # Divide el texto en fragmentos manejables
+    text_chunks = split_text(combined_text, max_tokens=max_tokens)
+    
+    analyses = []
+    total_tokens = 0
+
+    for chunk in text_chunks:
+        prompt = f"Analiza el siguiente texto y proporciona un resumen general de los problemas más comunes, las tendencias y los sentimientos:\n\n{chunk}"
+        data = {
+            "model": "gpt-3.5-turbo",
+            "messages": [
+                {"role": "system", "content": "Eres un analista de datos de atención al cliente."},
+                {"role": "user", "content": prompt}
+            ]
+        }
+
+        try:
+            response, headers = call_openai_api(data, headers)
+            print(response)  # Añade esta línea para ver la respuesta completa de la API
+            if 'choices' in response:
+                analysis = response['choices'][0]['message']['content'].strip()
+                analyses.append(analysis)
+                total_tokens += response['usage']['total_tokens']
+            else:
+                print(f"Respuesta inesperada de la API: {response}")
+                analyses.append("Error en el análisis general: respuesta inesperada de la API")
+        except Exception as e:
+            print(f"Error en la llamada a la API: {e}")
+            analyses.append("Error en el análisis general: fallo en la llamada a la API")
+
+    combined_analysis = ' '.join(analyses)
+    return combined_analysis, total_tokens
+
+def split_text(text, max_tokens=4096):
+    tokens = text.split()
+    chunks = []
+    chunk = []
+
+    for token in tokens:
+        if len(chunk) + len(token) + 1 > max_tokens:
+            chunks.append(' '.join(chunk))
+            chunk = [token]
+        else:
+            chunk.append(token)
+
+    if chunk:
+        chunks.append(' '.join(chunk))
+
+    return chunks
+
+# Contenedor para datos actualizados
+data_container = st.empty()
+
+# Función para actualizar y mostrar análisis en tiempo real
+def update_and_display_analysis():
+    st.markdown("### Última Actualización: " + time.strftime("%Y-%m-%d %H:%M:%S"))
+    df_tickets = fetch_zendesk_tickets(zendesk_url, zendesk_auth, zendesk_params, max_pages=5)
+    df_tickets = preprocess_tickets(df_tickets)
+    general_analysis, total_tokens = get_general_analysis(df_tickets, headers)
+    
+    st.write("### Análisis General de los Tickets")
+    st.write(general_analysis)
+    
+    st.write("### Tickets Recientes")
+    st.dataframe(df_tickets[['subject', 'description']])
+    
+    st.write(f"### Total de Tokens Usados: {total_tokens}")
+
+# Bucle para actualizar los datos automáticamente
+while True:
+    with data_container.container():
+        update_and_display_analysis()
+    time.sleep(refresh_interval)
